@@ -48,9 +48,15 @@ public synchronized void orderWithSynchronized(String productName, int amount){
 
 ## 회고
 이번 사전과제를 수행하면서 CAS연산과 synchronized 예약어 사용 중에 CAS연산을 적용하는 것이 더 좋다는 것을 알게 됐다. 다만, 머릿속으로 납득이 되지 않아서 약간의 테스트를 진행했다. 
+```java
+    long stTime = System.currentTimeMillis();
+    long edTime = System.currentTimeMillis();
+    System.out.println("ConcurrentHashMap 소요시간: " + (edTime - stTime) + "ms");
+```
 ![스크린샷 2025-01-05 오전 10 01 56](https://github.com/user-attachments/assets/6deadc1f-d55f-4907-9172-11d086fd3226)
 테스트는 같은 테스트 코드 내에서 시작지점과 끝 지점에 ```System.currentTimeMillis```코드를 사용해서 총 소요시간을 테스트한 것인데, ```concurrentHashMap```의 사용이 명확히 빨랐다.
-처음에는 어차피 순차적으로 실행되는 것이 같다면 내부적으로 실패했을 때 지속적으로 재시도를 하는 CAS 연산의 소요시간이 더 길지 않을까 싶었으나 그렇지 않았다. 내 생각에 나름의 이유는 이러했다.
+이유는 아래와 같다. 느낌적으로 ```synchronized```는 단일 스레드의 처리를 완벽히 보장한다. 반면 ```concurrentHashMap```은 데이터의 정합성만을 중요시 여긴다.
+
 ```synchronized```의 경우 아래와 같은 과정이 필요하다.
 1. 락의 점유 시도
 2. BLOCKED 상태로 변경
@@ -58,11 +64,23 @@ public synchronized void orderWithSynchronized(String productName, int amount){
 4. RUNNABLE 상태로 변경
 5. 코드 실행
 
-이러한 일련의 과정이 필요하고 ```ConcurrentHashMap```은 아래와 같다.
+ ```ConcurrentHashMap```은 아래와 같다.
 1. 코드 실행
 2. CAS연산 실패시 재실행
 
 어떤 한 메소드를 실행하는데 필요한 과정이 차이가 있다. 그리고 표면적으로는 같은 작업인 것 같지만 ```ConcurrentHashMap```을 이용한 방식에서는 **모든 스레드가 동시에 코드를 동작시키고 있다** 
 그리고 실패하면 재시도를 할 뿐이다. 반면 ```synchronized```는 실패할 일은 없지만 실패하지 않기 위한 많은 일련의 작업들이 필요한 것이다. 결론적으로 이러한 차이 때문에 ```Synchronized``` 와 같은
 락 기반의 처리와 ```ConcurrentHashMap```과 같은 CAS를 활용하는 처리를 사용하는 경우가 따로 있으니 그때그때 잘 정해서 써야한다.
+
+### 적용 시점의 차이
+적용 시점의 차이를 나누자면 아래와 같긴 하지만 비즈니스 요구사항에 따라 중요도가 달라지기도 하기 때문에 그때그때 상황에 맞춰서 사용하는 것이 중요하다. 락 기반의 경우 실제 락 구현 방식을 변경하여 성능적 
+이점을 취할 수도 있고, CAS연산도 상황에 맞춰서 코드를 잘 작성하면 단점을 어느정도 보완할 수 있을 것 같다. 
+
+```락 기반 동시성 처리```
+1. 단일 스레드 실행이 완벽히 보장돼야 하는 경우
+2. 빈번한 BLOCKED는 성능 저하 유발 가능성 있음
+
+```CAS연산 기반 동시성 처리```
+1. 경합이 적고 고성능이 요구되는 경우
+2. 무한 재시도 현상으로 인한 성능 저하 가능성이 있음
 
