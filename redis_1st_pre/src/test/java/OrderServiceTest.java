@@ -15,6 +15,7 @@ class OrderServiceTest {
     @Test
     @DisplayName("1. ConcurrentHashMap compute 사용")
     void testConcurrentOrdersCauseStockMismatch1() throws InterruptedException {
+        long stTime = System.currentTimeMillis();
         String productName = "apple";
         int initialStock = service.getStock(productName);
 
@@ -47,12 +48,15 @@ class OrderServiceTest {
 
         // 동시성 이슈로 인해 재고가 맞지 않는 경우를 확인
         assertEquals(expectedStock, actualStock, "재고 불일치 보완완료!");
+        long edTime = System.currentTimeMillis();
+        System.out.println("소요시간: " + (edTime - stTime));
     }
 
 
     @Test
     @DisplayName("2. synchronized 사용")
     void testConcurrentOrdersCauseStockMismatch2() throws InterruptedException {
+        long stTime = System.currentTimeMillis();
         String productName = "apple";
         int initialStock = service.getStock(productName);
 
@@ -85,6 +89,8 @@ class OrderServiceTest {
 
         // 동시성 이슈로 인해 재고가 맞지 않는 경우를 확인
         assertEquals(expectedStock, actualStock, "재고 불일치 보완완료!");
+        long edTime = System.currentTimeMillis();
+        System.out.println("소요시간: " + (edTime - stTime));
     }
 }
 
