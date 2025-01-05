@@ -6,9 +6,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class OrderService {
     // 상품 DB
-    private final ConcurrentHashMap<String, Integer> productDatabase = new ConcurrentHashMap<>();
+    private final Map<String, Integer> productDatabase = new ConcurrentHashMap<>();
     // 가장 최근 주문 정보를 저장하는 DB
-    private final Map<String, OrderInfo> latestOrderDatabase = new HashMap<>();
+    private final ThreadLocal<Map<String,OrderInfo>> latestOrderDatabase = new ThreadLocal<>();
 
     public OrderService() {
         // 초기 상품 데이터
@@ -28,7 +28,7 @@ public class OrderService {
         productDatabase.compute(productName,(key, currentStock)->{ // 원자적 연산처리
             if (currentStock >= amount) {
                 System.out.printf("%s 주문 정보: \n\t %s: 1건 ([%d])\n", Thread.currentThread().getName().substring(7), productName, amount);
-                latestOrderDatabase.put(productName, new OrderInfo(productName, amount, System.currentTimeMillis()));
+                latestOrderDatabase.set(Map.of(productName,new OrderInfo(productName, amount, System.currentTimeMillis())));
                 return currentStock - amount;
             } else {
                 return currentStock;
@@ -48,7 +48,7 @@ public class OrderService {
 
         if (currentStock >= amount) {
             System.out.printf("%s 주문 정보: \n\t %s: 1건 ([%d])\n", Thread.currentThread().getName().substring(7), productName, amount);
-            latestOrderDatabase.put(productName, new OrderInfo(productName, amount, System.currentTimeMillis()));
+            latestOrderDatabase.set(Map.of(productName,new OrderInfo(productName, amount, System.currentTimeMillis())));
             productDatabase.put(productName, currentStock - amount);
         }
     }
