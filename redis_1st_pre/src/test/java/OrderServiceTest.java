@@ -1,9 +1,11 @@
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import com.concurrent.OrderService;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class OrderServiceTest {
@@ -11,7 +13,8 @@ class OrderServiceTest {
     private final OrderService service = new OrderService();
 
     @Test
-    void testConcurrentOrdersCauseStockMismatch() throws InterruptedException {
+    @DisplayName("1. ConcurrentHashMap compute 사용")
+    void testConcurrentOrdersCauseStockMismatch1() throws InterruptedException {
         String productName = "apple";
         int initialStock = service.getStock(productName);
 
@@ -43,7 +46,8 @@ class OrderServiceTest {
         System.out.println("Expected Stock: " + expectedStock + ", Actual Stock: " + actualStock);
 
         // 동시성 이슈로 인해 재고가 맞지 않는 경우를 확인
-        assertNotEquals(expectedStock, actualStock, "재고 불일치 발생!");
+        assertEquals(expectedStock, actualStock, "재고 불일치 보완완료!");
     }
+
 }
 
