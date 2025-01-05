@@ -36,6 +36,23 @@ public class OrderService {
         });
     }
 
+    public synchronized void orderWithSynchronized(String productName, int amount){
+        int currentStock = productDatabase.get(productName);
+
+        try {
+            Thread.sleep(1); // 동시성 이슈 유발을 위한 인위적 지연
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+
+        if (currentStock >= amount) {
+            System.out.printf("%s 주문 정보: \n\t %s: 1건 ([%d])\n", Thread.currentThread().getName().substring(7), productName, amount);
+            latestOrderDatabase.put(productName, new OrderInfo(productName, amount, System.currentTimeMillis()));
+            productDatabase.put(productName, currentStock - amount);
+        }
+    }
+
     // 재고 조회
     public int getStock(String productName) {
         return productDatabase.getOrDefault(productName, 0);
