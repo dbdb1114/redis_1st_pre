@@ -12,7 +12,57 @@
 ![스크린샷 2025-01-04 오전 11 57 29](https://github.com/user-attachments/assets/3bf5da5b-bffe-4d90-974e-3ec0124f8691)
 
 ## 문제 해결
-해결 방향은 메모리 가시성 문제와 시간차 코드 실행을 방지하는 것이다. 따라서 order() 메소드는 스레드가 동시에 실행할 수 없도록 락(모니터락 Or renterantLock)을 설정해주고,
-모든 스레드의 실행이 순차적으로 될 수 있도록 보장하면 된다.
+해결 방향은 메모리 가시성 문제와 시간차 코드 실행을 방지하는 것이다. 따라서 order() 메소드는 스레드가 동시에 실행할 수 없도록 락을 설정해주거나 CAS 연산을 사용하는 
+concurrent 컬렉션 프레임워크를 사용해도 된다. 문제를 두 가지로 언급한 부분에 있어서 한가지 메모리 가시성 문제는 대부분의 동시성 처리를 해결하려는 노력들에서
+해결이 되는 수준이다. CAS 연산도 cpu 레벨에서 메모리 변경을 관여하게 되고, ```synchronized``` 키워드를 사용하는 것도 메모리 가시성을 해결해준다. 내부적으로 ```synchronized``` 메소드
+내부에서 사용한는 자원에 대해서는 캐시 메모리를 사용하지 않는다.
+
+### concurrent 컬렉션 프레임워크 사용 
+ConcurrentHashMap은 동시성 처리를 위한 컬렉션 프레임워크의 일부다. 
+```java
+productDatabase.compute(productName,(key, currentStock)->{ // 원자적 연산처리
+  if (currentStock >= amount) {
+    System.out.printf("%s 주문 정보: \n\t %s: 1건 ([%d])\n", Thread.currentThread().getName().substring(7), productName, amount);
+    latestOrderDatabase.put(productName, new OrderInfo(productName, amount, System.currentTimeMillis()));
+    return currentStock - amount;
+  } else {
+    return currentStock;
+  }
+});
+```
+기존의 코드를 위와 같이 변경했는데 이렇게 함으로써 order메소드 진입 직후의 재고를 기준으로 하여 재고를 업데이트 하게 된다. ConcurrentHashMap은 
+compute() 메소드를 활용한 CAS연산을 지원하는데 CAS연산이란 원자적 연산을 위한 방식으로 CompareAndSwap방식으로 데이터를 업데이트하는 것으로 CPU가 직접 지원하는 연산이다. 
+자바 코드에서 변경하려는 요소의 변경 전 데이터와 변경 후 데이터를 cpu에 전달하면 CPU에서는 데이터 변경 직전에 
+현재 데이터가 전달받은 변경 전 데이터와 같은지 확인 후에 같다면 변경 후 데이터로 바꿔주는 방식이다. 만약 다르다면 실패로 처리하고
+재시도를 하게 된다. 이렇게 함으로써 멀티 스레드 환경에서 스레드 세이프한 코드를 작성할 수 있다. 
+
+### synchronized 블럭 사용
+synchronized는 Object의 lock을 사용하는 방식인데, 자바의 모든 객체는 락을 가지고 있다. 따라서 아래와 같이 메소드명 옆에 synchronized를
+붙여주는 것 만으로 락을 이용한 동시성 처리를 할 수 있다. 
+```Java
+public synchronized void orderWithSynchronized(String productName, int amount){
+```
+이러한 락 방식을 모니터 락이라고 하고, 실제로 동작하는 방식은 특정 객체에서 synchronized가 붙은 메소드를 사용하는 스레드가 단일 스레드임을 보장한다. 
+즉, 하나의 객체를 활용한 orderWithSynchronized()메소드 실행 자체를 하나의 스레드만 할 수 있도록 제한하는 것이다. 1000개의 스레드가 동시에 해당 메소드를
+사용하려고 하면 하나의 스레드를 제외한 모든 스레드는 Blocked로 상태가 변경되고, 하나의 스레드가 작업이 끝나게 되면 락을 해제하고 다른 스레드가 메소드를 실행시킬 수 있도록 한다.
 
 ## 회고
+이번 사전과제를 수행하면서 CAS연산과 synchronized 예약어 사용 중에 CAS연산을 적용하는 것이 더 좋다는 것을 알게 됐다. 다만, 머릿속으로 납득이 되지 않아서 약간의 테스트를 진행했다. 
+![스크린샷 2025-01-05 오전 10 01 56](https://github.com/user-attachments/assets/6deadc1f-d55f-4907-9172-11d086fd3226)
+테스트는 같은 테스트 코드 내에서 시작지점과 끝 지점에 ```System.currentTimeMillis```코드를 사용해서 총 소요시간을 테스트한 것인데, ```concurrentHashMap```의 사용이 명확히 빨랐다.
+처음에는 어차피 순차적으로 실행되는 것이 같다면 내부적으로 실패했을 때 지속적으로 재시도를 하는 CAS 연산의 소요시간이 더 길지 않을까 싶었으나 그렇지 않았다. 내 생각에 나름의 이유는 이러했다.
+```synchronized```의 경우 아래와 같은 과정이 필요하다.
+1. 락의 점유 시도
+2. BLOCKED 상태로 변경
+3. 락의 점유 성공
+4. RUNNABLE 상태로 변경
+5. 코드 실행
+
+이러한 일련의 과정이 필요하고 ```ConcurrentHashMap```은 아래와 같다.
+1. 코드 실행
+2. CAS연산 실패시 재실행
+
+어떤 한 메소드를 실행하는데 필요한 과정이 차이가 있다. 그리고 표면적으로는 같은 작업인 것 같지만 ```ConcurrentHashMap```을 이용한 방식에서는 **모든 스레드가 동시에 코드를 동작시키고 있다** 
+그리고 실패하면 재시도를 할 뿐이다. 반면 ```synchronized```는 실패할 일은 없지만 실패하지 않기 위한 많은 일련의 작업들이 필요한 것이다. 결론적으로 이러한 차이 때문에 ```Synchronized``` 와 같은
+락 기반의 처리와 ```ConcurrentHashMap```과 같은 CAS를 활용하는 처리를 사용하는 경우가 따로 있으니 그때그때 잘 정해서 써야한다.
+
